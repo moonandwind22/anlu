@@ -51,7 +51,8 @@ wire [23:0] vout_data;
 wire        display_valid;
 
 wire [3:0]  state_code;
-wire [6:0]  seg_data_0;
+wire [7:0]  seg_n;       // seg7_panel 段选（低有效，{dp,g,f,e,d,c,b,a}）
+wire [7:0]  dig_n;       // seg7_panel 位选（低有效 one-hot，板卡 6 位用 [5:0]）
 
 wire        video_read_req;
 wire        video_read_req_ack;
@@ -163,6 +164,17 @@ sd_card_bmp #(
     .bmp_height        (16'd480),
     .display_valid     (display_valid),
 
+    // 轮播周期运行时配置：暂无外部来源（UART/菜单留作后续），端口预留
+    .period_cfg_valid  (1'b0),
+    .period_cfg_cycles (32'd0),
+
+    // 错误码观测口：后续接 UART/OSD 输出
+    .error_code        (),
+
+    // 数码管显示（seg7_panel 三页面轮播）
+    .seg_n             (seg_n),
+    .dig_n             (dig_n),
+
     .write_finish_toggle(frame_write_toggle_mem),
     .write_buf_idx     (write_buf_idx),
     .disp_buf_idx      (disp_buf_idx),
@@ -177,23 +189,10 @@ sd_card_bmp #(
     .SD_MISO           (sd_miso)
 );
 
-seg_decoder seg_decoder_m0(
-    .bin_data          (state_code),
-    .seg_data          (seg_data_0)
-);
-
-seg_scan seg_scan_m0(
-    .clk               (clk),
-    .rst_n             (rst_n),
-    .seg_sel           (seg_sel),
-    .seg_data          (seg_data),
-    .seg_data_0        ({1'b1,7'b1111_111}),
-    .seg_data_1        ({1'b1,7'b1111_111}),
-    .seg_data_2        ({1'b1,7'b1111_111}),
-    .seg_data_3        ({1'b1,7'b1111_111}),
-    .seg_data_4        ({1'b1,7'b1111_111}),
-    .seg_data_5        ({1'b1,seg_data_0})
-);
+// 数码管直连：极性/位序与原 seg_scan 一致（段选低有效，位选低有效 one-hot）
+// 若上板发现左右镜像（seg_sel[0] 实为最左位），把 dig_n[5:0] 位序翻转即可
+assign seg_data = seg_n;
+assign seg_sel  = dig_n[5:0];
 
 // ===================== 原图像时序与帧缓存 =====================
 video_timing_data video_timing_data_m0(
